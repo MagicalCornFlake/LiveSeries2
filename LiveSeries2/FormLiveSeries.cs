@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -35,10 +36,7 @@ namespace LiveSeries2
             InitializeComponent();
             if (OptimiseSettings())
                 SaveDataFile();
-            Log(new string[] {
-                $"Started log on {currentTime = DateTime.Now:yyyy-MM-dd' at 'HH:mm:ss.fffffff}.",
-                "-------------------------------"
-            }, true);
+            Log("", true);
             txtSearchBar.Text = "What are you looking for?";
             flpShowsList.Size = new Size(844, 440);
             UpdateSubscriptions();
@@ -46,7 +44,7 @@ namespace LiveSeries2
             GoHome();
             Task.Run(async () => await mainChecker.RunChecksForNewEpisodes());
         }
-        
+
         private bool ToggleShowSubscription(TvShow Show, Button btnThatWasClicked)
         {
             ShowHistory savedShow;
@@ -60,7 +58,6 @@ namespace LiveSeries2
                 savedShow = new ShowHistory { ID = Show.ID, Subscribed = true };
                 Settings.ShowLibrary.Add(savedShow);
             }
-            mainChecker.ForceNextEpisodesCheck();
             SaveDataFile();
             UpdateSubscribeButtonText(btnThatWasClicked, Show);
             return savedShow.Subscribed;
@@ -100,7 +97,7 @@ namespace LiveSeries2
 
                 Panel pnlHeaderContainer = new Panel() { AutoSize = true };
                 Panel pnlFooterContainer = new Panel() { AutoSize = true };
-                
+
                 void btnFrstPage_Click(object sender, EventArgs e)
                 {
                     if (shows.CurrentPage != 1)
@@ -123,13 +120,13 @@ namespace LiveSeries2
                     }
                 }
                 void btnLastPage_Click(object sender, EventArgs e)
+                {
+                    if (shows.CurrentPage != shows.TotalPages)
                     {
-                        if (shows.CurrentPage != shows.TotalPages)
-                        {
-                            DisplayShows(lastMenu, sourceQuery, pageNumber: shows.TotalPages);
-                        }
+                        DisplayShows(lastMenu, sourceQuery, pageNumber: shows.TotalPages);
                     }
-                
+                }
+
                 Label lblBottom = new Label
                 {
                     Text = lblTop.Text,
@@ -139,9 +136,9 @@ namespace LiveSeries2
                     ForeColor = lblTop.ForeColor
                 };
                 pnlFooterContainer.Controls.Add(lblBottom);
-                
+
                 const int btnDims = 23;
-                foreach (Control c in new Control[] { pnlHeaderContainer, pnlFooterContainer})
+                foreach (Control c in new Control[] { pnlHeaderContainer, pnlFooterContainer })
                 {
                     Button btnFrstPage = new Button
                     {
@@ -213,9 +210,14 @@ namespace LiveSeries2
                     Width = 205 * 4,
                     Height = 274 + 50
                 };
-                string startDate = Show.StartDate.ToString(longDateFormat);
-                string endDate = Show.EndDate is null ? "Present" : ((DateTime)Show.EndDate).ToString(longDateFormat);
-                string txt =  $"{Show.Name}\n\n{Show.Network} ({Show.Country})\n{startDate} — {endDate}";
+                if (Show.StartDate is null)
+                {
+                    string startDateType = Show.StartDateString is null ? "null" : Show.StartDateString.GetType().ToString();
+                    Log($"{Show.Name} start date: '{Show.StartDateString}' ({startDateType})");
+                }
+                string startDate = Show.StartDate is null ? Show.StartDateString ?? "Unknown" : ((DateTime)Show.StartDate).ToString(longDateFormat);
+                string endDate = Show.EndDate is null ? Show.EndDateString ?? "Present" : ((DateTime)Show.EndDate).ToString(longDateFormat);
+                string txt = $"{Show.Name}\n\n{Show.Network} ({Show.Country})\n{startDate} — {endDate}";
                 Label showInfoLabel = new Label
                 {
                     Name = "lbl_show_" + Show.ID.ToString(),
@@ -286,7 +288,7 @@ namespace LiveSeries2
                     Text = Settings.ShowNames[showID],
                     Font = lblTop.Font,
                     ForeColor = lblTop.ForeColor,
-                    Width = 100,
+                    Width = 200,
                     Height = 13 * 2
                 };
                 lblShowName.Click += new EventHandler(LblShowName_Click);
@@ -299,7 +301,8 @@ namespace LiveSeries2
                     Name = "flp_shw_" + showID.ToString(),
                     Width = 235,
                     Height = newEpisodes[showID].Count * (23 + 6) + lblShowName.Height,
-                    FlowDirection = FlowDirection.TopDown
+                    FlowDirection = FlowDirection.TopDown,
+                    WrapContents = false
                 };
                 flpNewEpisodesInShow.Controls.Add(lblShowName);
                 for (int i = 0; i < newEpisodes[showID].Count; i++)
@@ -309,7 +312,8 @@ namespace LiveSeries2
                     {
                         Name = "pnl_epi_" + episodeSerialised,
                         Width = 235,
-                        Height = 23
+                        Height = 23,
+                        BorderStyle = BorderStyle.Fixed3D
                     };
                     Label lblEpisode = new Label
                     {
@@ -332,17 +336,39 @@ namespace LiveSeries2
                     };
                     lblEpisode.Click += new EventHandler(episodeClickEvent);
                     lblStatus.Click += new EventHandler(episodeClickEvent);
-                    void episodeClickEvent(object sender, EventArgs e) {
+                    void episodeClickEvent(object sender, EventArgs e)
+                    {
                         if (lblStatus.Text != "Downloaded")
                             return;
-                        string showNameEncoded = NewEpisodesManager.RemoveInvalidDirectoryChars(Settings.ShowNames[showID]);
-                        string torrentDirectory = $@"{AppDomain.CurrentDomain.BaseDirectory}torrents\{showID}\{showNameEncoded}\{episodeSerialised}";
-                        System.Diagnostics.Process.Start("explorer.exe", torrentDirectory);
+                        string torrentRelativePath = mainChecker.GetEpisodeTorrentPath(showID, episodeSerialised);
+                        string torrentDirectory = AppDomain.CurrentDomain.BaseDirectory + torrentRelativePath;
+                        ProcessStartInfo info = new ProcessStartInfo
+                        {
+                            FileName = "explorer.exe",
+                            Arguments = $@"""{torrentDirectory}""",
+                            ErrorDialog = true
+                        };
+                        // Get the path to the magnet link file if it exists
+                        foreach (string filename in Directory.GetFiles(torrentDirectory))
+                        {
+                            if (!filename.EndsWith(".url"))
+                                continue;
+                            // Add the process start argument to make the explorer window select the file
+                            info.Arguments = $@"/select, ""{filename}""";
+                            break;
+                        }
+
+                        Process.Start(info);
                     }
-                    if (mainChecker.EpisodeHasBeenDownloaded(newEpisodes[showID].ElementAt(i), showID))
+                    Episode episode = new Episode();
+                    if (mainChecker.EpisodeHasBeenDownloaded(showID, episodeSerialised))
+                    {
                         lblStatus.Text = "Downloaded";
+                    }
                     else if (lblDownloadInfo.Visible && lblDownloadInfo.Text == Settings.ShowNames[showID] + " " + episodeSerialised)
+                    {
                         lblStatus.Text = "Downloading...";
+                    }
                     CheckBox chkEpisode = new CheckBox
                     {
                         Name = "chk_epi_" + episodeSerialised,
@@ -397,7 +423,8 @@ namespace LiveSeries2
                 {
                     Width = lblDate.Width + 10,
                     Height = lblDate.Height,
-                    FlowDirection = FlowDirection.TopDown
+                    FlowDirection = FlowDirection.TopDown,
+                    BorderStyle = BorderStyle.FixedSingle
                 };
                 flpNewEpisodesOnDate.Controls.Add(lblDate);
                 foreach (int showID in upcomingEpisodes[date].Keys)
@@ -425,8 +452,7 @@ namespace LiveSeries2
         private void ChangeWindow(string WindowName)
         {
             flpShowsList.Controls.Clear();
-            btnMostPopular.Visible = flpShowsList.Visible = btnSearch.Visible = lblTop.Visible = 
-            tlpNewEpisodes.Visible = txtSearchBar.Visible = lblCentre.Visible = timer.Enabled = false;
+            btnMostPopular.Visible = flpShowsList.Visible = btnSearch.Visible = lblTop.Visible = tlpNewEpisodes.Visible = txtSearchBar.Visible = lblCentre.Visible = timer.Enabled = false;
 
             CurrentlyViewingSubscriptions = WindowName == "Subscriptions";
 
@@ -441,6 +467,7 @@ namespace LiveSeries2
                     btnHome.Text = "Home";
                     break;
             }
+            // delete settings menu controls as well as episodes list navigation buttons
             foreach (Control c in Controls.Find("delete_me_on_menu_change", false))
                 c.Dispose();
         }
@@ -481,7 +508,7 @@ namespace LiveSeries2
                 };
                 Label lblShowDescription = new Label
                 {
-                    Text = Regex.Replace(Show.Description, "<b>|</b>", ""),
+                    Text = Regex.Replace(Show.Description, "<b>|</b>", "").Replace("<br>", "\n"),
                     Font = new Font("Microsoft Sans Serif", 9F, FontStyle.Regular, GraphicsUnit.Point, (byte)238),
                     ForeColor = lblTop.ForeColor,
                     Width = 450,
@@ -507,8 +534,8 @@ namespace LiveSeries2
                 pnlShowDetailsContainer.Controls.Add(lblShowDescription);
                 pnlShowDetailsContainer.Controls.Add(btnToggleShowSubscription);
                 pnlShowDetailsContainer.Height = 150 + lblShowName.Height + imgShowImage.Height + lblShowDescription.Height + btnToggleShowSubscription.Height;
-                
-                
+
+
                 if (Show.Episodes.Count > 0)
                 {
                     foreach (Episode episode in Show.Episodes)
@@ -757,7 +784,7 @@ namespace LiveSeries2
                 }
                 flpShowsList.Controls.Add(pnlShowDetailsContainer);
             }
-            
+
             TvShow ShowToDisplay = GetShowFromID(showID);
             ChangeWindow($@"Viewing ""{ShowToDisplay.Name}""");
             flpShowsList.Visible = true;
@@ -783,14 +810,14 @@ namespace LiveSeries2
             ChangeWindow($"Searching \"{rawSearchQuery}\"");
             DisplayShows(ProgramMenu.Search, rawSearchQuery, pageNumber);
         }
-        
+
         private void GoMostPopular(int pageNumber = 1)
         {
             ChangeWindow("Most Popular");
             DisplayShows(ProgramMenu.MostPopular, null, pageNumber);
         }
 
-        private void GoHome()
+        public void GoHome()
         {
             ChangeWindow("Home");
             lblTop.Text = "";
@@ -923,7 +950,7 @@ namespace LiveSeries2
                 Location = new Point(lblCentre.Location.X - 125, lblAskAfterDownloads.Location.Y - 4),
                 Anchor = AnchorStyles.Top
             };
-            
+
             cmbOrderSelector.Items.AddRange(new string[] { "Ascending", "Descending" });
             cmbOrderSelector.SelectedItem = cmbOrderSelector.Items[Settings.DefaultSortByAscending ? 0 : 1];
             cmbSortType.Items.AddRange(new string[] { "Number in series", "Release date" });
@@ -1052,7 +1079,7 @@ namespace LiveSeries2
             GoSubscriptions();
         }
 
-        private void btnMostPopular_Click(object sender, EventArgs e)
+        private void BtnMostPopular_Click(object sender, EventArgs e)
         {
             GoMostPopular();
         }
@@ -1158,6 +1185,5 @@ namespace LiveSeries2
             e.Cancel = mainChecker.shouldCheckForNewEpisodes;
         }
         #endregion
-
     }
 }

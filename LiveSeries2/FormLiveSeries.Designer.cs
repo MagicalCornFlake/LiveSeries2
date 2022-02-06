@@ -110,15 +110,13 @@ namespace LiveSeries2
             // 
             // flpShowsList
             // 
-            this.flpShowsList.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
             this.flpShowsList.AutoScroll = true;
+            this.flpShowsList.Dock = System.Windows.Forms.DockStyle.Fill;
             this.flpShowsList.FlowDirection = System.Windows.Forms.FlowDirection.TopDown;
             this.flpShowsList.Location = new System.Drawing.Point(0, 0);
             this.flpShowsList.Margin = new System.Windows.Forms.Padding(0);
             this.flpShowsList.Name = "flpShowsList";
-            this.flpShowsList.Size = new System.Drawing.Size(854, 0);
+            this.flpShowsList.Size = new System.Drawing.Size(914, 441);
             this.flpShowsList.TabIndex = 4;
             this.flpShowsList.WrapContents = false;
             // 
@@ -250,21 +248,25 @@ namespace LiveSeries2
             // 
             // tlpNewEpisodes
             // 
-            this.tlpNewEpisodes.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)));
+            this.tlpNewEpisodes.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.tlpNewEpisodes.AutoScroll = true;
             this.tlpNewEpisodes.AutoSize = true;
-            this.tlpNewEpisodes.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this.tlpNewEpisodes.BackColor = System.Drawing.Color.Gray;
+            this.tlpNewEpisodes.CellBorderStyle = System.Windows.Forms.TableLayoutPanelCellBorderStyle.Single;
             this.tlpNewEpisodes.ColumnCount = 1;
             this.tlpNewEpisodes.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.tlpNewEpisodes.Controls.Add(this.flpNewEpisodes, 0, 0);
             this.tlpNewEpisodes.Controls.Add(this.flpFutureEpisodes, 0, 1);
-            this.tlpNewEpisodes.Location = new System.Drawing.Point(5, 156);
-            this.tlpNewEpisodes.MinimumSize = new System.Drawing.Size(200, 283);
+            this.tlpNewEpisodes.Location = new System.Drawing.Point(0, 166);
+            this.tlpNewEpisodes.Margin = new System.Windows.Forms.Padding(0, 166, 0, 0);
+            this.tlpNewEpisodes.MinimumSize = new System.Drawing.Size(914, 283);
             this.tlpNewEpisodes.Name = "tlpNewEpisodes";
             this.tlpNewEpisodes.RowCount = 2;
             this.tlpNewEpisodes.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
-            this.tlpNewEpisodes.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 145F));
-            this.tlpNewEpisodes.Size = new System.Drawing.Size(225, 283);
+            this.tlpNewEpisodes.RowStyles.Add(new System.Windows.Forms.RowStyle());
+            this.tlpNewEpisodes.Size = new System.Drawing.Size(914, 283);
             this.tlpNewEpisodes.TabIndex = 0;
             // 
             // flpNewEpisodes
@@ -272,8 +274,10 @@ namespace LiveSeries2
             this.flpNewEpisodes.Anchor = System.Windows.Forms.AnchorStyles.Top;
             this.flpNewEpisodes.AutoScroll = true;
             this.flpNewEpisodes.AutoSize = true;
-            this.flpNewEpisodes.Location = new System.Drawing.Point(10, 0);
-            this.flpNewEpisodes.Margin = new System.Windows.Forms.Padding(10, 0, 10, 0);
+            this.flpNewEpisodes.BackColor = System.Drawing.SystemColors.ControlDark;
+            this.flpNewEpisodes.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+            this.flpNewEpisodes.Location = new System.Drawing.Point(354, 1);
+            this.flpNewEpisodes.Margin = new System.Windows.Forms.Padding(0);
             this.flpNewEpisodes.MinimumSize = new System.Drawing.Size(205, 145);
             this.flpNewEpisodes.Name = "flpNewEpisodes";
             this.flpNewEpisodes.Size = new System.Drawing.Size(205, 145);
@@ -282,16 +286,17 @@ namespace LiveSeries2
             // 
             // flpFutureEpisodes
             // 
-            this.flpFutureEpisodes.Anchor = System.Windows.Forms.AnchorStyles.Top;
+            this.flpFutureEpisodes.Anchor = System.Windows.Forms.AnchorStyles.None;
             this.flpFutureEpisodes.AutoScroll = true;
             this.flpFutureEpisodes.AutoSize = true;
-            this.flpFutureEpisodes.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
-            this.flpFutureEpisodes.Location = new System.Drawing.Point(10, 138);
+            this.flpFutureEpisodes.BackColor = System.Drawing.SystemColors.ControlDark;
+            this.flpFutureEpisodes.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+            this.flpFutureEpisodes.Location = new System.Drawing.Point(354, 148);
             this.flpFutureEpisodes.Margin = new System.Windows.Forms.Padding(0);
             this.flpFutureEpisodes.MaximumSize = new System.Drawing.Size(860, 400);
             this.flpFutureEpisodes.MinimumSize = new System.Drawing.Size(205, 134);
             this.flpFutureEpisodes.Name = "flpFutureEpisodes";
-            this.flpFutureEpisodes.Padding = new System.Windows.Forms.Padding(20, 15, 0, 0);
+            this.flpFutureEpisodes.Padding = new System.Windows.Forms.Padding(40, 15, 40, 0);
             this.flpFutureEpisodes.Size = new System.Drawing.Size(205, 134);
             this.flpFutureEpisodes.TabIndex = 6;
             // 
@@ -318,7 +323,7 @@ namespace LiveSeries2
             this.btnMostPopular.TabIndex = 7;
             this.btnMostPopular.Text = "Most Popular Shows";
             this.btnMostPopular.UseVisualStyleBackColor = true;
-            this.btnMostPopular.Click += new System.EventHandler(this.btnMostPopular_Click);
+            this.btnMostPopular.Click += new System.EventHandler(this.BtnMostPopular_Click);
             // 
             // FormLiveSeries
             // 

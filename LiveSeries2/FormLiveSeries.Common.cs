@@ -42,7 +42,7 @@ namespace LiveSeries2
                 }
             }
             delegate void SetVisCallback(Form f, Control ctrl, bool visibility);
-            
+
             /// <summary>
             /// Set location property of various controls
             /// </summary>
@@ -111,7 +111,7 @@ namespace LiveSeries2
                 }
             }
             delegate void SetValCallback(Form f, ProgressBar ctrl, int value);
-            
+
             /// <summary>
             /// Set text property of various controls
             /// </summary>
@@ -134,7 +134,7 @@ namespace LiveSeries2
                 }
             }
             delegate void SetTxtCallback(Form f, Control ctrl, string text);
-            
+
             /// <summary>
             /// Bring the form to the front
             /// </summary>
@@ -158,7 +158,7 @@ namespace LiveSeries2
                 }
             }
             delegate void BringFrontCallback(Form f);
-            
+
             /// <summary>
             /// Clear a parent control of its children
             /// </summary>
@@ -180,7 +180,7 @@ namespace LiveSeries2
                 }
             }
             delegate void ClearCallback(Form f, Control ctrl);
-            
+
             /// <summary>
             /// Add a child control to a parent control
             /// </summary>
@@ -199,18 +199,25 @@ namespace LiveSeries2
                     {
                         form.Invoke(d, new object[] { form, parent, child });
                     }
-                    catch (ObjectDisposedException) 
+                    catch (ObjectDisposedException)
                     {
 
                     }
                 }
                 else
                 {
-                    parent.Controls.Add(child);
+                    try
+                    {
+                        parent.Controls.Add(child);
+                    }
+                    catch (Exception e)
+                    {
+                        Log(e.Message);
+                    }
                 }
             }
             delegate void AddCallback(Form f, Control parent, Control child);
-            
+
         }
 
         private class NewEpisodesManager
@@ -220,12 +227,19 @@ namespace LiveSeries2
                 baseForm = form;
             }
 
-            public bool EpisodeHasBeenDownloaded(string episodeSerialised, int showID)
+            public string GetEpisodeTorrentPath(int showID, string episodeSerialised)
             {
-                // Remove invalid characters that cannot be in file directory
+                (int seasonNo, int episodeNo) = DeserialiseEpisode(episodeSerialised);
+                // Encode the show name
                 string showName = RemoveInvalidDirectoryChars(baseForm.Settings.ShowNames[showID]);
+                return $@"torrents\{showName}\{showID}\Season {seasonNo}\Episode {episodeNo}";
+            }
+
+            public bool EpisodeHasBeenDownloaded(int showID, string episodeSerialised)
+            {
+                string episodeTorrentPath = GetEpisodeTorrentPath(showID, episodeSerialised);
                 // Check if the file directory exists
-                return Directory.Exists($@"torrents\{showID}\{showName}\{episodeSerialised}");
+                return Directory.Exists(episodeTorrentPath);
             }
 
             public KeyValuePair<Dictionary<int, SortedSet<string>>, int> GetUnwatchedEpisodes(bool ignoreDownloadedEpisodes = true)
@@ -253,7 +267,7 @@ namespace LiveSeries2
                             continue;
                         if (!baseForm.Settings.ShowNames.ContainsKey(show.ID))
                             baseForm.Settings.ShowNames.Add(show.ID, show.Name);
-                        if (ignoreDownloadedEpisodes && EpisodeHasBeenDownloaded(episode.Serialised, show.ID))
+                        if (ignoreDownloadedEpisodes && EpisodeHasBeenDownloaded(show.ID, episode.Serialised))
                             continue;
                         // Add to dictionary
                         if (!unwatchedEpisodes.ContainsKey(show.ID))
@@ -262,7 +276,7 @@ namespace LiveSeries2
                         totalEpisodes++;
                     }
                 }
-                return new KeyValuePair<Dictionary<int, SortedSet<string>>, int> ( unwatchedEpisodes, totalEpisodes );
+                return new KeyValuePair<Dictionary<int, SortedSet<string>>, int>(unwatchedEpisodes, totalEpisodes);
             }
 
             public SortedDictionary<DateTime, Dictionary<int, List<Episode>>> GetUpcomingEpisodes()
@@ -290,11 +304,6 @@ namespace LiveSeries2
 
             public bool shouldCheckForNewEpisodes = true;
 
-            public void ForceNextEpisodesCheck()
-            {
-                forceNextEpisodesCheck = true;
-            }
-
             private readonly FormLiveSeries baseForm;
 
             private List<string> successfulDownloads, unsuccessfulDownloads;
@@ -315,15 +324,16 @@ namespace LiveSeries2
                 string showNameEncoded = RemoveInvalidDirectoryChars(baseForm.Settings.ShowNames[showID]);
                 string json = null;
 
-                Thread GetJsonThread = new Thread(t => json = baseForm.GetJsonStringFromURL(apibayURL, "q.php", showNameEncoded + "+" + episodeSerialised));
+                Thread GetJsonThread = new Thread(t => json = baseForm.GetJsonStringFromURL(apibayURL, "q.php", $"{showNameEncoded}+{episodeSerialised}"));
                 GetJsonThread.Start();
                 if (!GetJsonThread.Join(TimeSpan.FromSeconds(5)))
                     GetJsonThread.Abort();
                 if (json is null)
                 {
                     // Search query didn't return a JSON string
+                    Log("[Aborting] Could not fetch data from the torrent source.");
                     await FinishDownloadTask("Download failed!", showID, episodeSerialised);
-                    string unsuccessfulDownloadMessage = baseForm.Settings.ShowNames[showID] + " " + episodeSerialised + "\n" +
+                    string unsuccessfulDownloadMessage = $"{baseForm.Settings.ShowNames[showID]} {episodeSerialised}\n" +
                         $"Could not connect to the torrent host. Please try again later.\n" +
                         $"https://{apibayURL}/q.php?q={showNameEncoded}+{episodeSerialised}";
                     unsuccessfulDownloads.Add(unsuccessfulDownloadMessage);
@@ -331,14 +341,17 @@ namespace LiveSeries2
                 }
                 List<ApiBaySearchResult> rawResults = JsonConvert.DeserializeObject<List<ApiBaySearchResult>>(json);
                 List<ApiBaySearchResult> validResults = new List<ApiBaySearchResult>();
+                Log($"[Step 2/6] Determining the best torrent source for {showID} {episodeSerialised}...");
                 for (int i = 0; i < rawResults.Count; i++)
                 {
                     string torrentName = rawResults[i].Name;
                     if (torrentName.StartsWith(showNameEncoded.Replace(' ', '.') + "." + episodeSerialised))
                         validResults.Add(rawResults[i]);
                 }
+                Log($"[Step 3/6] Filtered {validResults.Count} valid torrent candidate(s) from {rawResults.Count} total result(s)...");
                 if (validResults.Count == 0)
                 {
+                    Log("[Aborting] Cancelling download task since there were no torrent candidates to select from.");
                     // Could not find a good torrent candidate
                     await FinishDownloadTask("Download failed!", showID, episodeSerialised);
                     string unsuccessfulDownloadMessage = $"{baseForm.Settings.ShowNames[showID]} {episodeSerialised}\n";
@@ -348,24 +361,25 @@ namespace LiveSeries2
                     return;
                 }
                 IOrderedEnumerable<ApiBaySearchResult> candidatesBySeeders = validResults.OrderByDescending(t => int.Parse(t.Seeders));
-                ApiBaySearchResult torrentInfo;
-                if (candidatesBySeeders.Any(t => int.Parse(t.Seeders) >= 1 && t.NumFiles == "1"))
-                    torrentInfo = candidatesBySeeders.First(t => int.Parse(t.Seeders) >= 1 && t.NumFiles == "1");
-                else
-                    torrentInfo = candidatesBySeeders.First();
-                string torrentDirectory = @"torrents\" + showID.ToString() + @"\" + showNameEncoded + @"\" + episodeSerialised;
+                // ApiBaySearchResult torrentInfo;
+                // if (candidatesBySeeders.Any(t => int.Parse(t.Seeders) > 0 && t.NumFiles == "1"))
+                //     torrentInfo = candidatesBySeeders.First(t => int.Parse(t.Seeders) > 0 && t.NumFiles == "1");
+                // else
+                ApiBaySearchResult torrentInfo = candidatesBySeeders.First();
+                Log($"[Step 4/6] Selected torrent candidate with {torrentInfo.Seeders} seeder(s) and {torrentInfo.NumFiles} total file(s)...");
+                string torrentDirectory = GetEpisodeTorrentPath(showID, episodeSerialised);
                 Directory.CreateDirectory(torrentDirectory);
-                string magnetLink = string.Format("magnet:?xt=urn:btih:{0}&dn={1}", torrentInfo.InfoHash, torrentInfo.Name);
-                using (FileStream fs = File.Create(torrentDirectory + @"\torrent_details.json"))
+                string magnetLink = $"magnet:?xt=urn:btih:{torrentInfo.InfoHash}&dn={torrentInfo.Name}";
+                using (FileStream fs = File.Create($@"{torrentDirectory}\torrent_details.json"))
                 {
                     string details = JsonConvert.SerializeObject(torrentInfo, Formatting.Indented);
                     byte[] info = new UTF8Encoding(true).GetBytes(details);
                     fs.Write(info, 0, info.Length);
                 }
-                using (StreamWriter writer = new StreamWriter(torrentDirectory + @"\" + torrentInfo.Name + ".url"))
+                using (StreamWriter writer = new StreamWriter(torrentDirectory + $@"\{torrentInfo.Name}.url"))
                 {
                     writer.WriteLine("[InternetShortcut]");
-                    writer.WriteLine("URL=" + magnetLink);
+                    writer.WriteLine($"URL={magnetLink}");
                     writer.Flush();
                 }
 
@@ -378,6 +392,7 @@ namespace LiveSeries2
 
             private void SetAsDownloading(int showID, string episodeSerialised, int totalDownloaded)
             {
+                Log($"[Step 1/6] Commencing download process of {showID} {episodeSerialised}...");
                 ThreadHelperClass.SetProgressBarValue(baseForm, baseForm.prgDownload, 0);
                 string newStatusText = $"Downloading ({totalDownloaded}/{downloadQueue.Value})...";
                 ThreadHelperClass.SetControlText(baseForm, baseForm.lblDownloadStatus, newStatusText);
@@ -386,22 +401,30 @@ namespace LiveSeries2
                 ThreadHelperClass.SetControlVisibility(baseForm, baseForm.lblDownloadInfo, true);
                 ThreadHelperClass.SetControlVisibility(baseForm, baseForm.prgDownload, true);
 
-                try {
-                    Control c = baseForm.flpNewEpisodes.Controls[$"flp_shw_{showID}"].Controls[$"pnl_epi_{episodeSerialised}"].Controls[$"lbl_sts_{episodeSerialised}"];
-                    ThreadHelperClass.SetControlText(baseForm, c, "Downloading...");
-                } catch (IndexOutOfRangeException)
+                baseForm.Invoke(new Action(() =>
                 {
-                    // User is not in the home menu
-                }
+                    if (!baseForm.Text.StartsWith("Home"))
+                    {
+                        baseForm.GoHome();
+                        return;
+                    }
+                    Control showContainer = baseForm.flpNewEpisodes.Controls[$"flp_shw_{showID}"];
+                    Control episodeContainer = showContainer.Controls[$"pnl_epi_{episodeSerialised}"];
+                    Control statusLabel = episodeContainer.Controls[$"lbl_sts_{episodeSerialised}"];
+                    statusLabel.Text = "Downloading...";
+                }));
             }
 
             private void DownloadTorrent(string magnetLink)
             {
+                Log("[Step 5/6] Launching the torrent client...");
+                // For now just opens the magnet link; if the user has a torrent client installed, it will start the download there
                 Process.Start(magnetLink);
             }
 
             private async Task FinishDownloadTask(string newStatusText, int showID, string episodeSerialised)
             {
+                Log($"[Finished] Download process of {showID} {episodeSerialised} has reached completion.");
                 ThreadHelperClass.SetProgressBarValue(baseForm, baseForm.prgDownload, 100);
                 ThreadHelperClass.SetControlText(baseForm, baseForm.lblDownloadStatus, newStatusText);
                 int delayInMilliseconds = 1000;
@@ -517,7 +540,6 @@ namespace LiveSeries2
                         // Obtain any user input (text boxes, menu selections) from the notification
                         ValueSet userInput = toastArgs.UserInput;
                         ThreadHelperClass.BringToFront(baseForm);
-                        forceNextEpisodesCheck = true;
                     };
                     return false;
                 }
@@ -573,12 +595,11 @@ namespace LiveSeries2
                     // Download queue is updated every 5 seconds (5000 milliseconds)
                     downloadQueue = GetUnwatchedEpisodes();
                     if (downloadQueue.Value > 0)
-                    /* Performs a check for new episodes every 1 hour
-                    if (currentDate >= baseForm.Settings.LastEpisodesCheckDate.Add(new TimeSpan(hours: 1, 0, 0)) || forceNextEpisodesCheck) */
+                    // Performs a check for new episodes every 1 hour
+                    // if (currentDate >= baseForm.Settings.LastEpisodesCheckDate.Add(new TimeSpan(hours: 1, 0, 0)))
                     {
-                        forceNextEpisodesCheck = false;
                         Log(new string[] {
-                            $"Checking for new episodes (last check: {baseForm.Settings.LastEpisodesCheckDate:HH':'mm':'ss})",
+                            $"Downloading new episodes (last check: {baseForm.Settings.LastEpisodesCheckDate:HH':'mm':'ss})...",
                             $"Episodes to download: {downloadQueue.Value}"
                         });
                         baseForm.Settings.LastEpisodesCheckDate = currentDate;
@@ -651,25 +672,60 @@ namespace LiveSeries2
             public string Description { get; set; }
             [JsonProperty("description_source")]
             public string DescriptionSource { get; set; }
-            public DateTime StartDate { get; set; } 
+            public DateTime? StartDate { get; set; }
+            private string StartDateStr { get; set; }
             [JsonProperty("start_date")]
-            public string StartDateString 
+            public string StartDateString
             {
-                get { return StartDate.ToString(); }
-                set { StartDate = DateTime.Parse(value) + TimeZone.CurrentTimeZone.GetUtcOffset(currentTime); }
+                get
+                {
+                    return StartDate is null ? StartDateStr : StartDate.ToString(); 
+                }
+                set
+                {
+                    StartDateStr = value;
+                    if (value is null)
+                        return;
+                    try
+                    {
+                        StartDate = DateTime.Parse(value) + TimeZone.CurrentTimeZone.GetUtcOffset(currentTime);
+                    } catch (FormatException)
+                    {
+                        if (value.Length == 0)
+                        {
+                            StartDateStr = null;
+                        }
+                        Log($"Invalid start date '{value}' for show '{Name}'.");
+                    }
+                }
             } // Present in tv show overview on search page
+            private string EndDateStr { get; set; }
             public DateTime? EndDate { get; set; }
             [JsonProperty("end_date")]
-            public string EndDateString 
-            { 
-                get { return EndDate.ToString(); } 
-                set {
-                    if (value is null || value == "")
-                    {
-                        EndDate = null;
+            public string EndDateString
+            {
+                get
+                {
+                    return EndDate is null ? EndDateStr : EndDate.ToString();
+                }
+                set
+                {
+                    EndDateStr = value;
+                    if (value is null)
                         return;
+                    try
+                    {
+                        EndDate = DateTime.Parse(value) + TimeZone.CurrentTimeZone.GetUtcOffset(currentTime);
                     }
-                    EndDate = DateTime.Parse(value) + TimeZone.CurrentTimeZone.GetUtcOffset(currentTime); } 
+                    catch (FormatException)
+                    {
+                        if (value.Length ==  0)
+                        {
+                            EndDateStr = null;
+                        }
+                        Log($"Invalid end date '{value}' for show '{Name}'.");
+                    }
+                }
             } // Present in tv show overview on search page
             [JsonProperty("country")]
             public string Country { get; set; } // Present in tv show overview on search page
@@ -733,6 +789,14 @@ namespace LiveSeries2
             public int ID { get; set; }
             public bool Subscribed { get; set; } = false;
             public SortedDictionary<string, SortedSet<int>> WatchedEpisodes { get; set; } = new SortedDictionary<string, SortedSet<int>>();
+        }
+
+        public static (int season, int episode) DeserialiseEpisode(string episodeSerialised)
+        {
+            string[] episodeInfo = episodeSerialised.Split('E');
+            int seasonNo = int.Parse(episodeInfo[0].Substring(1, 2));
+            int episodeNo = int.Parse(episodeInfo[1]);
+            return (seasonNo, episodeNo);
         }
 
         private enum ProgramMenu
@@ -804,22 +868,26 @@ namespace LiveSeries2
 
         private string MakeWebRequest(string query)
         {
+            Log($"Making a web request to '{query}'...");
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(query);
             try
             {
                 HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+                Log("Received a response from the HTTP request.");
                 string rawResult = new StreamReader(response.GetResponseStream()).ReadToEnd();
                 return rawResult;
             }
-            catch (WebException)
+            catch (WebException e)
             {
+                Log(e.Message);
                 return null;
             }
         }
 
         private string GetJsonStringFromURL(string domain, string pageName, string query, int pageNumber = 1, bool useCachedResults = true)
         {
-            string cachePath = $@"cache\{domain.Split('.')[0]}\{pageName}\{NewEpisodesManager.RemoveInvalidDirectoryChars(query)}\page {pageNumber}\";
+            string queryEncoded = NewEpisodesManager.RemoveInvalidDirectoryChars(query);
+            string cachePath = $@"cache\{domain.Split('.')[0]}\{pageName}\{queryEncoded}\page {pageNumber}\";
             Directory.CreateDirectory(cachePath);
             DateTime oneHourAgo = DateTime.Now.Subtract(new TimeSpan(hours: 1, minutes: 0, seconds: 0));
             if (useCachedResults && File.Exists(cachePath + "cache.json") && File.GetLastWriteTime(cachePath + "cache.json") >= oneHourAgo)
@@ -831,14 +899,16 @@ namespace LiveSeries2
                         return content;
                 }
             }
-            string json = MakeWebRequest($"https://{domain}/{pageName}?q={HttpUtility.HtmlEncode(query)}&page={pageNumber}");
+            if (query != null)
+                queryEncoded = HttpUtility.HtmlEncode(query).Replace(' ', '+');
+            string json = MakeWebRequest($"https://{domain}/{pageName}?q={queryEncoded}&page={pageNumber}");
             File.WriteAllText(cachePath + "cache.json", json);
             return json;
         }
 
         private TvShow GetShowFromID(int showID)
         {
-            string rawResult = GetJsonStringFromURL(episodateURL,  "show-details", showID.ToString());
+            string rawResult = GetJsonStringFromURL(episodateURL, "show-details", showID.ToString());
             if (rawResult is null)
                 return null;
             ShowData show = JsonConvert.DeserializeObject<ShowData>(rawResult);
@@ -895,31 +965,36 @@ namespace LiveSeries2
                 Task.Delay(600).ContinueWith(t => ThreadHelperClass.SetControlVisibility(this, prgFileSave, false));
         }
 
-        private static void Log(string line, bool startNewLog = false)
+        private static void Log(string line, bool forceNewLogMessage = false)
         {
-            Log(new string[] { line }, startNewLog);
+            Log(new string[] { line }, forceNewLogMessage);
         }
 
-        private static void Log(string[] lines, bool startNewLog = false)
+        private static void Log(string[] lines, bool forceNewLogMessage = false)
         {
-            currentTime = DateTime.Now;
             Directory.CreateDirectory("logs");
-            string[] logs = Directory.GetFiles("logs");
-            bool newLog = startNewLog || logs.Length == 0;
-            string lastLogName = logs[logs.Length - 1];
-            string filename = newLog ? $@"logs\{currentTime:yyyy-MM-dd HH;mm;ss}.log" : logs[logs.Length - 1] ;
+            string filename = $@"logs\{DateTime.Now:yyyy-MM-dd}.log";
+            bool existed = File.Exists(filename);
+
             try
             {
                 using (StreamWriter w = File.AppendText(filename))
                 {
-                    foreach (string line in lines)
-                        w.WriteLine($"{currentTime:yyyy-MM-dd @ HH:mm:ss}: {line}");
+                    void _Write(string[] linesToWrite)
+                    {
+                        foreach (string line in linesToWrite)
+                        {
+                            w.WriteLine($"{DateTime.Now:yyyy-MM-dd @ HH:mm:ss}: {line}");
+                        }
+                    }
+                    if (!existed || forceNewLogMessage)
+                        _Write(new string[] { "Started new log.", "-------------------------------" });
+                    _Write(lines);
                 }
-            } 
-            catch (IOException)
+            } catch (IOException e)
             {
-                // If the file is being written to in another process, try again in 10 ms
-                Task.Delay(10).ContinueWith(t => Log(lines, startNewLog));
+                // Try again in 100 ms
+                Task.Delay(100).ContinueWith(t => Log(lines.Concat(new string[] { e.Message }).ToArray(), forceNewLogMessage));
             }
         }
     }
