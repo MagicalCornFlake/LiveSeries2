@@ -248,7 +248,7 @@ namespace LiveSeries2
                 int totalEpisodes = 0;
                 foreach (ShowHistory subscribedShow in baseForm.Settings.ShowLibrary.Where(SavedShow => SavedShow.Subscribed))
                 {
-                    TvShow show = baseForm.GetShowFromID(subscribedShow.ID);
+                    TvShow show = GetShowFromID(subscribedShow.ID);
                     if (show is null)
                         continue;
                     foreach (Episode episode in show.Episodes)
@@ -262,7 +262,7 @@ namespace LiveSeries2
                             if (userHasWatchedThisEpisode)
                                 continue;
                         }
-                        // Discard future episodes
+                        // Discard future episodesbaseForm.GetShowFromID
                         if (episode.AirDate > DateTime.Now)
                             continue;
                         if (!baseForm.Settings.ShowNames.ContainsKey(show.ID))
@@ -284,7 +284,7 @@ namespace LiveSeries2
                 SortedDictionary<DateTime, Dictionary<int, List<Episode>>> upcomingEpisodes = new SortedDictionary<DateTime, Dictionary<int, List<Episode>>>();
                 foreach (ShowHistory subscribedShow in baseForm.Settings.ShowLibrary.Where(SavedShow => SavedShow.Subscribed))
                 {
-                    TvShow show = baseForm.GetShowFromID(subscribedShow.ID);
+                    TvShow show = GetShowFromID(subscribedShow.ID);
                     if (show is null)
                         continue;
                     foreach (Episode episode in show.Episodes)
@@ -324,10 +324,16 @@ namespace LiveSeries2
                 string showNameEncoded = RemoveInvalidDirectoryChars(baseForm.Settings.ShowNames[showID]);
                 string json = null;
 
-                Thread GetJsonThread = new Thread(t => json = baseForm.GetJsonStringFromURL(apibayURL, "q.php", $"{showNameEncoded}+{episodeSerialised}"));
+                Log("[Step 1/6] Fetching the torrent info...");
+                Thread GetJsonThread = new Thread(t => json = GetJsonStringFromURL(apibayURL, "q.php", $"{showNameEncoded}+{episodeSerialised}"));
                 GetJsonThread.Start();
+                Log("[Step 1/6] Started the HTTP fetch thread...");
                 if (!GetJsonThread.Join(TimeSpan.FromSeconds(5)))
+                {
+                    Log("[Aborting] The fetch thread is unresponsive for over 5 seconds. Terminating it...");
                     GetJsonThread.Abort();
+                }
+                Log("[Step 1/6] HTTP fetch thread terminated successfully...");
                 if (json is null)
                 {
                     // Search query didn't return a JSON string
@@ -392,17 +398,24 @@ namespace LiveSeries2
 
             private void SetAsDownloading(int showID, string episodeSerialised, int totalDownloaded)
             {
-                Log($"[Step 1/6] Commencing download process of {showID} {episodeSerialised}...");
-                ThreadHelperClass.SetProgressBarValue(baseForm, baseForm.prgDownload, 0);
-                string newStatusText = $"Downloading ({totalDownloaded}/{downloadQueue.Value})...";
-                ThreadHelperClass.SetControlText(baseForm, baseForm.lblDownloadStatus, newStatusText);
-                ThreadHelperClass.SetControlText(baseForm, baseForm.lblDownloadInfo, baseForm.Settings.ShowNames[showID] + " " + episodeSerialised);
-                ThreadHelperClass.SetControlVisibility(baseForm, baseForm.lblDownloadStatus, true);
-                ThreadHelperClass.SetControlVisibility(baseForm, baseForm.lblDownloadInfo, true);
-                ThreadHelperClass.SetControlVisibility(baseForm, baseForm.prgDownload, true);
+                Log($"[Step 0/6] Commencing download process of {showID} {episodeSerialised}...");
 
+                // Don't update any controls if the application is minimised to the system tray
+                if (!baseForm.Visible)
+                {
+                    return;
+                }
+
+                string newStatusText = $"Downloading ({totalDownloaded}/{downloadQueue.Value})...";
+                string showName = baseForm.Settings.ShowNames[showID];
                 baseForm.Invoke(new Action(() =>
                 {
+                    baseForm.prgDownload.Value = 0;
+                    baseForm.lblDownloadStatus.Text = newStatusText;
+                    baseForm.lblDownloadInfo.Text = $"{showName} {episodeSerialised}";
+                    baseForm.prgDownload.Visible = true;
+                    baseForm.lblDownloadStatus.Visible = true;
+                    baseForm.lblDownloadInfo.Visible = true;
                     if (!baseForm.Text.StartsWith("Home"))
                     {
                         baseForm.GoHome();
@@ -866,7 +879,7 @@ namespace LiveSeries2
             UpdateSubscriptions();
         }
 
-        private string MakeWebRequest(string query)
+        private static string MakeWebRequest(string query)
         {
             Log($"Making a web request to '{query}'...");
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(query);
@@ -884,7 +897,7 @@ namespace LiveSeries2
             }
         }
 
-        private string GetJsonStringFromURL(string domain, string pageName, string query, int pageNumber = 1, bool useCachedResults = true)
+        private static string GetJsonStringFromURL(string domain, string pageName, string query, int pageNumber = 1, bool useCachedResults = true)
         {
             string queryEncoded = NewEpisodesManager.RemoveInvalidDirectoryChars(query);
             string cachePath = $@"cache\{domain.Split('.')[0]}\{pageName}\{queryEncoded}\page {pageNumber}\";
@@ -906,7 +919,7 @@ namespace LiveSeries2
             return json;
         }
 
-        private TvShow GetShowFromID(int showID)
+        private static TvShow GetShowFromID(int showID)
         {
             string rawResult = GetJsonStringFromURL(episodateURL, "show-details", showID.ToString());
             if (rawResult is null)
@@ -988,7 +1001,11 @@ namespace LiveSeries2
                         }
                     }
                     if (!existed || forceNewLogMessage)
-                        _Write(new string[] { "Started new log.", "-------------------------------" });
+                        _Write(new string[] {
+                            "----------------",
+                            "Started new log.",
+                            "----------------"
+                        });
                     _Write(lines);
                 }
             } catch (IOException e)

@@ -36,7 +36,7 @@ namespace LiveSeries2
             InitializeComponent();
             if (OptimiseSettings())
                 SaveDataFile();
-            Log("", true);
+            Log("Application initialising...", true);
             txtSearchBar.Text = "What are you looking for?";
             flpShowsList.Size = new Size(844, 440);
             UpdateSubscriptions();
@@ -449,6 +449,10 @@ namespace LiveSeries2
             }
         }
 
+        /// <summary>
+        /// Middleware function that runs on each window change. Updates the window title and resets control visibility.
+        /// </summary>
+        /// <param name="WindowName">The partial title that the application should display for this window.</param>
         private void ChangeWindow(string WindowName)
         {
             flpShowsList.Controls.Clear();
@@ -1057,7 +1061,9 @@ namespace LiveSeries2
                 GoHome();
         }
 
-        // Process the message instructing the instance to restore its window (used when app is launched when it's running)
+        /// <summary>
+        /// Process the message instructing the instance to restore its window (used when app is launched while already running).
+        /// </summary>
         protected override void WndProc(ref Message message)
         {
             if (message.Msg == SingleInstance.WM_SHOWFIRSTINSTANCE)
@@ -1157,17 +1163,23 @@ namespace LiveSeries2
             SaveDataFile(instantly: true);
             mainChecker.shouldCheckForNewEpisodes = false;
             Log(new string[] {
-                "-------------------------------",
-                $"Program exiting (taskbar option)."
+                "----------------------------------",
+                $"Program exiting (taskbar option).",
+                "----------------------------------"
             });
             Close();
         }
 
         private void IcnTaskBar_MouseClick(object sender, MouseEventArgs e)
         {
+            // Only handle left-click events
+            if (e.Button != MouseButtons.Left)
+                return;
+            // Minimise to system tray if the application is open and visible
             if (Visible)
                 Hide();
-            else if (e.Button == MouseButtons.Left)
+            // Restore the application window if it was previously minimised
+            else
                 RestoreWindow();
         }
 
@@ -1176,8 +1188,9 @@ namespace LiveSeries2
             if (ModifierKeys == Keys.Shift)
             {
                 Log(new string[] {
-                    "-------------------------------",
-                    $"Program exiting (shift+X)."
+                    "---------------------------",
+                    $"Program exiting (shift+X).",
+                    "---------------------------"
                 });
                 return;
             }
