@@ -27,6 +27,9 @@ namespace LiveSeries2
         }
     }
 
+    /// <summary>
+    /// Magic code from StackOverflow??
+    /// </summary>
     public static class WinApi
     {
         [DllImport("user32")]
@@ -57,6 +60,9 @@ namespace LiveSeries2
         }
     }
 
+    /// <summary>
+    /// This too is *Magic Code from StackOverflow*(TM)!
+    /// </summary>
     static public class SingleInstance
     {
         public const string ProgramGuid = "98337c7a-3b11-40b1-9768-c9c53a768191";

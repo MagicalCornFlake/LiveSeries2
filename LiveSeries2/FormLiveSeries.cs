@@ -36,7 +36,8 @@ namespace LiveSeries2
             InitializeComponent();
             if (OptimiseSettings())
                 SaveDataFile();
-            Log("Application initialising...", true);
+            string version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            Log($"Loading LiveSeries v{version}", true);
             txtSearchBar.Text = "What are you looking for?";
             flpShowsList.Size = new Size(844, 440);
             UpdateSubscriptions();
