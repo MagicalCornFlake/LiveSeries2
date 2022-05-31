@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,6 +24,7 @@ namespace LiveSeries2
         private readonly ProgramSettings Settings;
         private readonly NewEpisodesManager mainChecker;
         private readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
+        private readonly List<EventHandler> timerEvents = new List<EventHandler>();
         private bool CurrentlyViewingSubscriptions = false;
         private static DateTime currentTime = DateTime.MinValue;
 
@@ -36,14 +38,15 @@ namespace LiveSeries2
             InitializeComponent();
             if (OptimiseSettings())
                 SaveDataFile();
-            string version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            string version = assembly.GetName().Version.ToString();
             Log($"Loading LiveSeries v{version}", true);
             txtSearchBar.Text = "What are you looking for?";
             flpShowsList.Size = new Size(844, 440);
             UpdateSubscriptions();
             mainChecker = new NewEpisodesManager(this);
             GoHome();
-            Task.Run(async () => await mainChecker.RunChecksForNewEpisodes());
+            Task.Run(mainChecker.RunChecksForNewEpisodes);
         }
 
         private bool ToggleShowSubscription(TvShow Show, Button btnThatWasClicked)
@@ -458,6 +461,10 @@ namespace LiveSeries2
         {
             flpShowsList.Controls.Clear();
             btnMostPopular.Visible = flpShowsList.Visible = btnSearch.Visible = lblTop.Visible = tlpNewEpisodes.Visible = txtSearchBar.Visible = lblCentre.Visible = timer.Enabled = false;
+            foreach (EventHandler ev in timerEvents)
+            {
+                timer.Tick -= ev;
+            }
 
             CurrentlyViewingSubscriptions = WindowName == "Subscriptions";
 
@@ -859,6 +866,7 @@ namespace LiveSeries2
                 }
                 updateLabelText();
                 timer.Tick += updateLabelTextHandler;
+                timerEvents.Add(updateLabelTextHandler);
                 timer.Interval = 1000;
                 timer.Enabled = true;
             }

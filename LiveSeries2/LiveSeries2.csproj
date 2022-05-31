@@ -59,11 +59,10 @@
     <TransformOutOfDateOnly>false</TransformOutOfDateOnly>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestCertificateThumbprint>89ED2FEF47AB336CFC20862EC4B0A6FF8AA56A88</ManifestCertificateThumbprint>
+    <ManifestCertificateThumbprint>EA44A3EAE82B4C8EE949FD8F937E2AE9EAD3B29C</ManifestCertificateThumbprint>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestKeyFile>
-    </ManifestKeyFile>
+    <ManifestKeyFile>LiveSeries2_TemporaryKey.pfx</ManifestKeyFile>
   </PropertyGroup>
   <PropertyGroup>
     <GenerateManifests>true</GenerateManifests>
@@ -140,6 +139,7 @@
       <DesignTime>True</DesignTime>
     </Compile>
     <None Include="data.json" />
+    <None Include="LiveSeries2_TemporaryKey.pfx" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
