@@ -4,6 +4,11 @@ You can search for movies and shows, track which episodes you've watched, and su
 The program will automatically download unwatched episodes of subscribed TV shows as they release, as well as unwatched episodes from the past.
 You need a bittorrent application to handle the `.torrent` files downloaded by this program, such as [qBittorrent](https://www.qbittorrent.org/).
 
+## DEPRECATION - 2024-06-11
+
+As of 2024-06-11, this project has been suspended and the repository has been archived. It is not recommended to use this software. 
+The functionality of LiveSeries Legacy has been superseded by LiveSeries, available as a web application at [www.guzek.uk/liveseries](https://www.guzek.uk/liveseries).
+
 ## IMPORTANT LEGAL NOTICE
 Please ensure that downloading torrents is legal in your country before installing this program.
 Refer to the copyright section at the bottom of this page or the [LICENSE file](https://github.com/kguzek/LiveSeriesLegacy/blob/master/LICENSE) included in this repository, specifically §15 and §16.
